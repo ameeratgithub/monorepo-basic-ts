@@ -14,17 +14,14 @@ A pnpm monorepo with shared Zod validation between frontend and backend.
 
 ## Getting Started
 
+Make sure you have docker installed on your system. Run the following command
 ```bash
-# Install dependencies
-pnpm install
-
-# Run both apps in development
-pnpm dev
-
-# Run individual apps
-pnpm dev:client
-pnpm dev:server
+docker-compose up -d --build
 ```
+
+- Client should be up at http://localhost:3000
+- Server should be up at http://localhost:3001
+- PgAdmin should be up at http://localhost:5051
 
 ## Key Features
 

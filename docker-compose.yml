@@ -1,0 +1,107 @@
+version: '3.8'
+
+services:
+  # =============================================================================
+  # DATABASE
+  # =============================================================================
+  postgres:
+    image: postgres:16-alpine
+    container_name: monorepo-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: devuser
+      POSTGRES_PASSWORD: devuserpassword
+      POSTGRES_DB: monorepo_db
+    ports:
+      - "5433:5432"  # Using 5433 to avoid conflict with existing postgres
+    volumes:
+      - monorepo_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U devuser -d monorepo_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # =============================================================================
+  # PGADMIN
+  # =============================================================================
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: monorepo-pgadmin
+    restart: unless-stopped
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@admin.com
+      PGADMIN_DEFAULT_PASSWORD: admin
+      PGADMIN_CONFIG_SERVER_MODE: "False"
+      PGADMIN_CONFIG_MASTER_PASSWORD_REQUIRED: "False"
+    ports:
+      - "5051:80"  # Using 5051 to avoid conflict with existing pgadmin
+    volumes:
+      - monorepo_pgadmin_data:/var/lib/pgadmin
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  # =============================================================================
+  # BACKEND (NestJS)
+  # =============================================================================
+  server:
+    build:
+      context: .
+      dockerfile: apps/server/Dockerfile
+    container_name: monorepo-server
+    restart: unless-stopped
+    environment:
+      NODE_ENV: development
+      PORT: 3001
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USERNAME: devuser
+      DB_PASSWORD: devuserpassword
+      DB_NAME: monorepo_db
+    ports:
+      - "3001:3001"
+    volumes:
+      # Mount source for hot reload
+      - ./packages/shared:/app/packages/shared:ro
+      - ./apps/server/src:/app/apps/server/src
+      # Exclude node_modules
+      - /app/node_modules
+      - /app/apps/server/node_modules
+      - /app/packages/shared/node_modules
+    depends_on:
+      postgres:
+        condition: service_healthy
+    command: pnpm --filter @repo/server dev
+
+  # =============================================================================
+  # FRONTEND (Next.js)
+  # =============================================================================
+  client:
+    build:
+      context: .
+      dockerfile: apps/client/Dockerfile
+    container_name: monorepo-client
+    restart: unless-stopped
+    environment:
+      NODE_ENV: development
+      NEXT_PUBLIC_API_URL: http://localhost:3001
+    ports:
+      - "3000:3000"
+    volumes:
+      # Mount source for hot reload
+      - ./packages/shared:/app/packages/shared:ro
+      - ./apps/client/src:/app/apps/client/src
+      # Exclude node_modules
+      - /app/node_modules
+      - /app/apps/client/node_modules
+      - /app/packages/shared/node_modules
+    depends_on:
+      - server
+    command: pnpm --filter @repo/client dev
+
+volumes:
+  monorepo_postgres_data:
+    name: monorepo_postgres_data
+  monorepo_pgadmin_data:
+    name: monorepo_pgadmin_data
